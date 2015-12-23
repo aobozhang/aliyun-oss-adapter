@@ -26,7 +26,7 @@
     },
     "autoload": {
       "psr-4": {
-        "aobozhang\\aliyun-oss-adapter\\": "src/",
+        "aobozhang\\aliyun-oss-adapter\\": "src/"
       }
     }
 }
