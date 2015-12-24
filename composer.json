@@ -18,7 +18,7 @@
         }
     ],
     "require": {
-      "php": ">=5.4.0",
+      "php": ">=5.5.9",
       "illuminate/support": ">=5.0",
       "league/flysystem": "~1.0",
       "guzzle/guzzle": "3.7.1",
@@ -26,7 +26,7 @@
     },
     "autoload": {
       "psr-4": {
-        "aobozhang\\aliyun-oss-adapter\\": "src/"
+        "Aobo\\OSS\\": "src/"
       }
     }
 }
