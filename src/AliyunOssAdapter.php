@@ -4,23 +4,50 @@ use OSS\OssClient;
 use OSS\Core\OssException;
 use League\Flysystem\Adapter\AbstractAdapter;
 use League\Flysystem\Adapter\Polyfill\NotSupportingVisibilityTrait;
+use League\Flysystem\AdapterInterface;
 use League\Flysystem\Config;
 use League\Flysystem\Util;
 
 class AliyunOssAdapter extends AbstractAdapter
 {
-    use NotSupportingVisibilityTrait;
+    /**
+     * @var array
+     */
+    protected static $resultMap = [
+    'Body'           => 'raw_contents',
+    'Content-Length' => 'size',
+    'ContentType'    => 'mimetype',
+    'Size'           => 'size',
+    'StorageClass'   => 'storage_class',
+    ];
+
     /**
      * @var array
      */
     protected static $metaOptions = [
-        'CacheControl',
-        'Expires',
-        'UserMetadata',
-        'ContentType',
-        'ContentLanguage',
-        'ContentEncoding'
+    'CacheControl',
+    'Expires',
+    'ServerSideEncryption',
+    'Metadata',
+    'ACL',
+    'ContentType',
+    'ContentDisposition',
+    'ContentLanguage',
+    'ContentEncoding',
     ];
+
+    protected static $metaMap = [
+    'CacheControl'         => 'Cache-Control',
+    'Expires'              => 'Expires',
+    'ServerSideEncryption' => 'x-oss-server-side-encryption',
+    'Metadata'             => 'x-oss-metadata-directive',
+    'ACL'                  => 'x-oss-object-acl',
+    'ContentType'          => 'Content-Type',
+    'ContentDisposition'   => 'Content-Disposition',
+    'ContentLanguage'      => 'response-content-language',
+    'ContentEncoding'      => 'Content-Encoding',
+    ];
+
 
     /**
      * @var string bucket name
@@ -28,37 +55,57 @@ class AliyunOssAdapter extends AbstractAdapter
     protected $bucket;
 
     /**
-     * @var OSSClient client
+     * @var Aliyun Oss Client
      */
     protected $client;
 
     /**
+     * @var array default options[
+     *            Multipart=128 Mb - After what size should multipart be used
+     *            MinPartSize=4 Mb - Minimum size of parts for each part
+     *            Concurrency=3 - If multipart is used, how many concurrent connections should be used
+     *            ]
+     */
+    protected $options = [
+    'Multipart'   => 128,
+    'MinPartSize' => 4,
+    'Concurrency' => 3,
+    ];
+
+    /**
      * Constructor.
      *
-     * @param OSSClient     $client
+     * @param OssClient     $client
      * @param string        $bucket
      * @param string        $prefix
+     * @param array         $options
      */
-    public function __construct(OSSClient $client, $prefix = null) 
-    {
-        $this->client = $client;
+    public function __construct(
+        OssClient $client,
+        $bucket,
+        $prefix = null,
+        array $options = []
+        ) {
+        $this->client  = $client;
+        $this->bucket  = $bucket;
         $this->setPathPrefix($prefix);
+        $this->options = array_merge($this->options, $options);
     }
 
     /**
-     * Get the OSSClient bucket.
+     * Get the OssClient bucket.
      *
      * @return string
      */
     public function getBucket()
     {
-        return $this->client->listBuckets();
+        return $this->bucket;
     }
 
     /**
-     * Get the OSSClient instance.
+     * Get the OssClient instance.
      *
-     * @return OSSClient
+     * @return OssClient
      */
     public function getClient()
     {
@@ -66,35 +113,13 @@ class AliyunOssAdapter extends AbstractAdapter
     }
 
     /**
-     * Get an object.
-     *
-     * @param string $path
-     *
-     * @return OSSObject
-     */
-    protected function getObject($path)
-    {
-        try {
-            $options = $this->getOptions($path);
-            return $this->client->getObject($options);
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
-        }
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function has($path)
     {
-        $object = $this->getObject($path);
-        if($object) {
-            return $this->normalizeObject($object);
-        } else {
-            return false;
-        }
+        $location = $this->applyPathPrefix($path);
+
+        return $this->client->doesObjectExist($this->bucket, $location);
     }
 
     /**
@@ -102,25 +127,15 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function write($path, $contents, Config $config)
     {
-        $options = $this->getOptions(
-            $path,
-            [
-                'Content'       => $contents,
-                'ContentType'   => Util::guessMimeType($path, $contents),
-                'ContentLength' => Util::contentSize($contents),
-            ],
-            $config
-        );
+        $bucket  = $this->bucket;
+        $options = $this->getOptions($this->options, $config);
 
-        try {
-            if($this->client->putObject($options) === false) {
-                return false;
-            }
-            return true;
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
+        try{
+            $this->client->putObject($bucket, $path, $contents, $options);
+        } catch(OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
         }
     }
 
@@ -129,26 +144,27 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function writeStream($path, $resource, Config $config)
     {
-        $options = $this->getOptions(
-            $path,
-            [
-                'Content'       => $resource,
-                'ContentType'   => Util::guessMimeType($path, $resource),
-                'ContentLength' => Util::getStreamSize($resource),
-            ],
-            $config
-        );
+        $bucket  = $this->bucket;
+        $options = $this->getOptions($this->options, $config);
 
-        try {
-            if($this->client->putObject($options) === false) {
-                return false;
+        $multipartLimit = $this->mbToBytes($options['Multipart']);
+        $size = Util::getStreamSize($resource);
+        $contents = fread($resource, $size);
+
+        if ($size > $multipartLimit) {
+            printf(__FUNCTION__ . ": OVER LIMIT\n");
+            printf($e->getMessage() . "\n");
+            return;
+        } else {
+            try{
+                $this->client->putObject($bucket, $path, $contents, $options);
+            } catch(OssException $e) {
+                printf(__FUNCTION__ . ": FAILED\n");
+                printf($e->getMessage() . "\n");
+                return;
             }
-            return true;
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
         }
+        
     }
 
     /**
@@ -156,6 +172,10 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function update($path, $contents, Config $config)
     {
+        if (! $config->has('visibility') && ! $config->has('ACL')) {
+            $config->set('ACL', $this->getObjectACL($path));
+        }
+
         return $this->write($path, $contents, $config);
     }
 
@@ -164,6 +184,10 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function updateStream($path, $resource, Config $config)
     {
+        if (! $config->has('visibility') && ! $config->has('ACL')) {
+            $config->set('ACL', $this->getObjectACL($path));
+        }
+
         return $this->writeStream($path, $resource, $config);
     }
 
@@ -172,14 +196,10 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function read($path)
     {
-        $object = $this->getObject($path);
-        if($object) {
-            $data = $this->normalizeObject($object);
-        } else {
-            return false;
-        }
-        $data['contents'] = (string) $object->__toString();
-        return $data;
+        $result = $this->readObject($path);
+        $result['contents'] = (string) $result['raw_contents'];
+        unset($result['raw_contents']);
+        return $result;
     }
 
     /**
@@ -187,15 +207,32 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function readStream($path)
     {
-        $object = $this->getObject($path);
-        if($object) {
-            $data = $this->normalizeObject($object);
-        } else {
-            return false;
-        }
-        $data['stream'] = $object->__toString();
-        $object->__destruct();
-        return $data;
+        $result = $this->readObject($path);
+        $result['stream'] = $result['raw_contents'];
+        rewind($result['stream']);
+        // Ensure the EntityBody object destruction doesn't close the stream
+        $result['raw_contents']->detachStream();
+        unset($result['raw_contents']);
+
+        return $result;
+    }
+
+    /**
+     * Read an object from the OssClient.
+     *
+     * @param string $path
+     *
+     * @return array
+     */
+    protected function readObject($path)
+    {
+        $options = [];
+        $bucket = $this->bucket;
+        $object = $path;
+
+        $result = $this->client->getObject($bucket, $object, $options);
+
+        return $this->normalizeResponse($result);
     }
 
     /**
@@ -203,22 +240,10 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function rename($path, $newpath)
     {
-        $options = [
-            'SourceBucket'  => $this->bucket,
-            'SourceKey'     => $this->applyPathPrefix($path),
-            'DestBucket'    => $this->bucket,
-            'DestKey'       => $this->applyPathPrefix($newpath)
-        ];
+        $this->copy($path, $newpath);
+        $this->delete($path);
 
-        try {
-            $this->client->copyObject($options);
-            $this->delete($path);
-            return true;
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
-        }
+        return true;
     }
 
     /**
@@ -226,21 +251,17 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function copy($path, $newpath)
     {
-        $options = [
-            'SourceBucket'  => $this->bucket,
-            'SourceKey'     => $this->applyPathPrefix($path),
-            'DestBucket'    => $this->bucket,
-            'DestKey'       => $this->applyPathPrefix($newpath)
-        ];
+        $bucket = $this->bucket;
 
-        try {
-            $this->client->copyObject($options);
-            return true;
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
+        try{   
+            $this->client->copyObject($bucket, $path, $bucket, $newpath);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
         }
+
+        return true;
     }
 
     /**
@@ -248,16 +269,18 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function delete($path)
     {
-        $options = $this->getOptions($path);
-
-        try {
-            $this->client->deleteObject($options);
-            return ! $this->has($path);
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
+        $bucket = $this->bucket;
+        $object = $path;
+        
+        try{
+            $this->client->deleteObject($bucket, $object);
+        }catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
         }
+        
+        return ! $this->has($path);
     }
 
     /**
@@ -265,8 +288,93 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function deleteDir($path)
     {
-        // The V2 SDK can't support delete matching objects
-        return false;
+        $prefix = rtrim($this->applyPathPrefix($path), '/').'/';
+        $bucket = $this->bucket;
+        $dir = $this->listDirObjects($path, true);
+        
+        if(count($dir['objects']) > 0 ){
+            $objects = $dir['objects'];
+            try {
+                $this->client->deleteObjects($bucket, $objects);
+            } catch (OssException $e) {
+                printf(__FUNCTION__ . ": FAILED\n");
+                printf($e->getMessage() . "\n");
+                return;
+            }
+        }
+
+        return true;
+    }
+
+
+    /**
+     * 列举文件夹内文件列表；
+     */
+    public function listDirObjects($dirname = '', $recursive =  false)
+    {
+        $bucket = $this->bucket;
+
+        $delimiter = '/';
+        $nextMarker = '';
+        $maxkeys = 1000;
+
+        $options = array(
+            'delimiter' => $delimiter,
+            'prefix'    => $dirname,
+            'max-keys'  => $maxkeys,
+            'marker'    => $nextMarker,
+            );
+
+        try {
+            $listObjectInfo = $this->client->listObjects($bucket, $options);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
+        }
+        // var_dump($listObjectInfo);
+        $objectList = $listObjectInfo->getObjectList(); // 文件列表
+        $prefixList = $listObjectInfo->getPrefixList(); // 目录列表
+
+        if (!empty($objectList)) {
+            foreach ($objectList as $objectInfo) {
+                
+                $object['Prefix']       = $dirname;
+                $object['Key']          = $objectInfo->getKey();
+                $object['LastModified'] = $objectInfo->getLastModified();
+                $object['eTag']         = $objectInfo->getETag();
+                $object['Type']         = $objectInfo->getType();
+                $object['Size']         = $objectInfo->getSize();
+                $object['StorageClass'] = $objectInfo->getStorageClass();
+
+                $dir['objects'][] = $object;
+            }
+        }else{
+            $dir["objects"] = [];
+        }
+
+        if (!empty($prefixList)) {
+            foreach ($prefixList as $prefixInfo) {
+                $dir['prefix'][] = $prefixInfo->getPrefix();
+            }
+
+        }else{
+            $dir['prefix'] = [];
+        }
+
+
+        if($recursive){
+            
+            foreach( $dir['prefix'] as $pfix){
+                $next = [];
+                $next  =  $this->listDirObjects($pfix , $recursive);
+                
+                $dir["objects"] = array_merge($dir['objects'], $next["objects"]);
+            }
+
+        }
+
+        return $dir;
     }
 
     /**
@@ -274,10 +382,17 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function createDir($path, Config $config)
     {
-        $result = $this->write(rtrim($path, '/').'/', '', $config);
-        if (! $result) {
-            return false;
+
+        $bucket = $this->bucket;
+
+        try {
+            $this->client->createObjectDir($bucket, $path);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
         }
+
         return ['path' => $path, 'type' => 'dir'];
     }
 
@@ -286,8 +401,18 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function getMetadata($path)
     {
-        $object = $this->getObject($path);
-        return $object->getMetadata();
+        $bucket = $this->bucket;
+        $object = $path;
+
+        try {
+            $objectMeta = $this->client->getObjectMeta($bucket, $object);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
+        }
+
+        return $objectMeta;
     }
 
     /**
@@ -295,8 +420,9 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function getMimetype($path)
     {
-        $object = $this->getObject($path);
-        return $object->getContentType();
+        $object = $this->getMetadata($path);
+        $object['mimetype'] = $object['content-type'];
+        return $object;
     }
 
     /**
@@ -304,9 +430,9 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function getSize($path)
     {
-        $object = $this->getObject($path);
-        //return $this->getContentLength($object);
-        return ['size' => $object->getContentLength()];
+        $object = $this->getMetadata($path);
+        $object['size'] = $object['content-length'];
+        return $object;
     }
 
     /**
@@ -314,8 +440,9 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function getTimestamp($path)
     {
-        $object = $this->getObject($path);
-        return $object->getLastModified() ? $object->getLastModified()->getTimestamp() : null;
+        $object = $this->getMetadata($path);
+        $object['timestamp'] = $object['date'];
+        return $object;
     }
 
     /**
@@ -323,12 +450,30 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function getVisibility($path)
     {
-        // The V2 SDK can't support objects' ACL
-        if($this->has($path)) {
-            return 'public';
-        } else {
-            return false;
+        $bucket = $this->bucket;
+
+        try {
+            $res['visibility'] = $this->client->getBucketAcl($bucket);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
         }
+        return $res;
+    }
+
+    /**
+     * The the ACL visibility.
+     *
+     * @param string $path
+     *
+     * @return string
+     */
+    protected function getObjectACL($path)
+    {
+        $metadata = $this->getVisibility($path);
+
+        return $metadata['visibility'] === AdapterInterface::VISIBILITY_PUBLIC ? 'public-read' : 'private';
     }
 
     /**
@@ -336,88 +481,99 @@ class AliyunOssAdapter extends AbstractAdapter
      */
     public function setVisibility($path, $visibility)
     {
-        // The V2 SDK can't support objects' ACL
-        return false;
+        $bucket = $this->bucket;
+        $acl = ( $visibility === AdapterInterface::VISIBILITY_PUBLIC ) ? 'public-read' : 'private';
+
+        $this->client->putBucketAcl($bucket,$acl);
+
+        return compact('visibility');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function listContents($directory = '', $recursive = false)
+    public function listContents($dirname = '', $recursive = false)
     {
-        $response = [];
-        $marker = null;
-        $location = $this->applyPathPrefix($directory);
-        try {
-            while(true) {
-                $objectList = $this->client->listObjects(['Bucket' => $this->bucket, 'Prefix' => $location, 'Marker' => $marker, 'MaxKeys' => 100]);
-                $objectSummarys = $objectList->getObjectSummarys();
-                if (!$objectSummarys || count($objectSummarys) === 0) {
-                    break;
-                }
-                foreach($objectSummarys as $summary) {
-                    if($summary) {
-                        $object = $this->getObject($this->removePathPrefix($summary->getKey()));
-                        if(!$object) {
-                            continue;
-                        }
-                        $response[] = $object;
-                        $marker = $object->getKey();
-                    }
-                }
-            }
-            return Util::emulateDirectories(array_map([$this, 'normalizeObject'], $response));
-        } catch (OSSException $e) {
-            return false;
-        } catch (ClientException $e) {
-            return false;
-        }
+
+        $bucket = $this->bucket;
+        $dir = $this->listDirObjects($dirname, true);
+        $contents = $dir["objects"];
+        
+        $result = array_map([$this, 'normalizeResponseOri'], $contents);
+        $result = array_filter($result, function ($value) {
+            return $value['path'] !== false;
+        });
+
+        return Util::emulateDirectories($result);
     }
 
     /**
-     * Normalize a result from OSS.
+     * Normalize a result from AWS.
      *
-     * @param OSSObject  $object
+     * @param array  $object
+     * @param string $path
      *
      * @return array file metadata
      */
-    protected function normalizeObject(OSSObject $object)
+    protected function normalizeResponseOri(array $object, $path = null)
     {
-        $name = $object->getKey();
-        $name = $this->removePathPrefix($name);
-        $mimetype = explode('; ', $object->getContentType());
+        $result = ['path' => $path ?: $this->removePathPrefix(isset($object['Key']) ? $object['Key'] : $object['Prefix'])];
+        $result['dirname'] = Util::dirname($result['path']);
 
-        return [
-            'type'      => 'file',
-            'dirname'   => Util::dirname($name),
-            'path'      => $name,
-            'timestamp' => $object->getLastModified() ? $object->getLastModified()->getTimestamp() : null,
-            'mimetype'  => reset($mimetype),
-            'size'      => $object->getContentLength(),
-        ];
+        if (isset($object['LastModified'])) {
+            $result['timestamp'] = strtotime($object['LastModified']);
+        }
+
+        if (substr($result['path'], -1) === '/') {
+            $result['type'] = 'dir';
+            $result['path'] = rtrim($result['path'], '/');
+
+            return $result;
+        }
+
+        $result = array_merge($result, Util::map($object, static::$resultMap), ['type' => 'file']);
+
+        return $result;
     }
 
     /**
-     * Get options for a OSS call.
+     * Normalize a result from AWS.
      *
+     * @param array  $object
      * @param string $path
+     *
+     * @return array file metadata
+     */
+    protected function normalizeResponse($content)
+    {
+
+
+        $result['raw_contents'] = $content;
+        $result = array_merge($result, ['type' => 'file']);
+
+        return $result;
+    }
+
+    /**
+     * Get options for a OSS call. done
+     *
      * @param array  $options
-     * @param Config $config
      *
      * @return array OSS options
      */
-    protected function getOptions($path, array $options = [], Config $config = null)
+    protected function getOptions(array $options = [], Config $config = null)
     {
-        $options['Key']    = $this->applyPathPrefix($path);
-        $options['Bucket'] = $this->bucket;
+        $options = array_merge($this->options, $options);
+
         if ($config) {
             $options = array_merge($options, $this->getOptionsFromConfig($config));
         }
-        return $options;
+
+        return array(OssClient::OSS_HEADERS => $options);
     }
 
     /**
-     * Retrieve options from a Config instance.
+     * Retrieve options from a Config instance. done
      *
      * @param Config $config
      *
@@ -426,18 +582,42 @@ class AliyunOssAdapter extends AbstractAdapter
     protected function getOptionsFromConfig(Config $config)
     {
         $options = [];
+
         foreach (static::$metaOptions as $option) {
             if (! $config->has($option)) {
                 continue;
             }
-            $options[$option] = $config->get($option);
+            $options[$metaMap[$option]] = $config->get($option);
         }
+
+        if ($visibility = $config->get('visibility')) {
+            // For local reference
+            // $options['visibility'] = $visibility;
+            // For external reference
+            $options['x-oss-object-acl'] = $visibility === AdapterInterface::VISIBILITY_PUBLIC ? 'public-read' : 'private';
+        }
+
         if ($mimetype = $config->get('mimetype')) {
             // For local reference
-            $options['mimetype'] = $mimetype;
+            // $options['mimetype'] = $mimetype;
             // For external reference
-            $options['ContentType'] = $mimetype;
+            $options['Content-Type'] = $mimetype;
         }
+
         return $options;
     }
+
+
+    /**
+     * Convert megabytes to bytes.
+     *
+     * @param int $megabytes
+     *
+     * @return int
+     */
+    protected function mbToBytes($megabytes)
+    {
+        return $megabytes * 1024 * 1024;
+    }
+
 }
