@@ -2,13 +2,14 @@
 
 use OSS\OssClient;
 use OSS\Core\OssException;
-
 use League\Flysystem\Adapter\AbstractAdapter;
+use League\Flysystem\Adapter\Polyfill\NotSupportingVisibilityTrait;
 use League\Flysystem\Config;
 use League\Flysystem\Util;
 
 class AliyunOssAdapter extends AbstractAdapter
 {
+    use NotSupportingVisibilityTrait;
     /**
      * @var array
      */
@@ -38,8 +39,10 @@ class AliyunOssAdapter extends AbstractAdapter
      * @param string        $bucket
      * @param string        $prefix
      */
-    public function __construct(OSSClient $client) {
-        $this->client  = $client;
+    public function __construct(OSSClient $client, $prefix = null) 
+    {
+        $this->client = $client;
+        $this->setPathPrefix($prefix);
     }
 
     /**
