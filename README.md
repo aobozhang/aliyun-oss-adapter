@@ -1,46 +1,30 @@
 ```title
-NOT READY YET - Aliyun OSS adapter
+Service Provider NOT READY YET - Aliyun OSS adapter Done 
+```
+```
+inspire by [orzcc/aliyun-oss](https://github.com/orzcc/aliyun-oss)
 ```
 
 # Aliyun OSS adapter
-Aliyun oss for Laravel5, also support flysystem adapter.
+Aliyun oss for Laravel5.1, also support flysystem adapter.
 
 ## Installation
 
 This package can be installed through Composer.
 ```bash
-composer require aobozhang/aliyun-oss-adapter
-```
-
-This service provider must be registered.
-```bash
-// config/app.php
-
-'providers' => [
-    '...',
-    'Orzcc\AliyunOss\AliyunOssServiceProvider::class',
-];
-```
-
-At last, you can edit the config file: config/filesystem.php.
-
-add a disk config to the config
-```bash
-'oss' => [
-    'driver'        => 'oss',
-	'access_id'    	=> 'Your oss access id',
-	'access_key' 	=> 'Your oss access key',
-	'bucket' 	=> 'Your project bucket on oss',
-	'endpoint'    	=> '' // oss-cn-beijing.aliyuncs.com !!without 'http://'
-	'prefix'	=> '' // path in bucket;
-],
-```
-
-change default to oss
-```bash
-'default' => 'oss';
+composer require aobozhang/aliyun-oss-adapter:@dev
 ```
 
 ## Usage
 
-You can now use Laravel5's flysystem to upload or get file/directory from oss, follow the document, http://laravel.com/docs/5.0/filesystem
+```php
+use Aobo\OSS\AliyunOssAdapter;
+use League\Flysystem\Filesystem;
+use OSS\OssClient;
+
+$client     = new OssClient( $accessId, $accessKey, $endPoint);
+$adapter    = new AliyunOssAdapter($client, $bucket );
+$filesystem = new Filesystem($adapter);
+
+$filesystem-><every thing in filesystem>
+```
