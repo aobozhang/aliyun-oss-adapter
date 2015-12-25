@@ -55,4 +55,4 @@ use Storage;
 
 Strorage::[everything in doc]
 ```
-[filesystem](https://laravel.com/docs/5.2/filesystem)
+[https://laravel.com/docs/5.2/filesystem](https://laravel.com/docs/5.2/filesystem)
