@@ -7,6 +7,25 @@ Aliyun oss driver for Laravel5.0+, also support flysystem adapter.
 
 *IMPORTANT: aliyuncs/oss-sdk-php 2.0.1 needed， via 2.0.2 report bugs, —— Aliyun @rz*
 
+
+## Usage
+
+```php
+
+use Storage;
+
+//...
+
+Strorage::[everything in doc]
+```
+> more infomation 更多信息:
+>
+> [Laravel wiki](https://laravel.com/docs/5.2/filesystem)
+>
+> [Aobo's  wiki](https://github.com/aobozhang/aliyun-oss-adapter/wiki)
+>
+
+
 ## Installation
 
 This package can be installed through Composer.
@@ -14,7 +33,7 @@ This package can be installed through Composer.
 composer require aobozhang/aliyun-oss-adapter
 ```
 
-## Usage
+## Configuration
 
 This service provider must be registered.
 
@@ -48,13 +67,3 @@ change default to oss
 ```bash
 'default' => 'oss';
 ```
-
-```php
-
-use Storage;
-
-//...
-
-Strorage::[everything in doc]
-```
-[https://laravel.com/docs/5.2/filesystem](https://laravel.com/docs/5.2/filesystem)
