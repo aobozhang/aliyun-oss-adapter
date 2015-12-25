@@ -62,14 +62,10 @@ class AliyunOssAdapter extends AbstractAdapter
     /**
      * @var array default options[
      *            Multipart=128 Mb - After what size should multipart be used
-     *            MinPartSize=4 Mb - Minimum size of parts for each part
-     *            Concurrency=3 - If multipart is used, how many concurrent connections should be used
      *            ]
      */
     protected $options = [
-    'Multipart'   => 128,
-    'MinPartSize' => 4,
-    'Concurrency' => 3,
+    'Multipart'   => 128
     ];
 
     /**
@@ -173,9 +169,9 @@ class AliyunOssAdapter extends AbstractAdapter
     public function update($path, $contents, Config $config)
     {
         if (! $config->has('visibility') && ! $config->has('ACL')) {
-            $config->set('ACL', $this->getObjectACL($path));
+            $config->set(static::$metaMap['ACL'], $this->getObjectACL($path));
         }
-
+        $this->delete($path);
         return $this->write($path, $contents, $config);
     }
 
@@ -187,7 +183,7 @@ class AliyunOssAdapter extends AbstractAdapter
         if (! $config->has('visibility') && ! $config->has('ACL')) {
             $config->set('ACL', $this->getObjectACL($path));
         }
-
+        $this->delete($path);
         return $this->writeStream($path, $resource, $config);
     }
 
@@ -293,7 +289,12 @@ class AliyunOssAdapter extends AbstractAdapter
         $dir = $this->listDirObjects($path, true);
         
         if(count($dir['objects']) > 0 ){
-            $objects = $dir['objects'];
+
+            foreach($dir['objects'] as $object)
+            {
+                $objects[] = $object['Key'];
+            }
+
             try {
                 $this->client->deleteObjects($bucket, $objects);
             } catch (OssException $e) {
@@ -301,14 +302,23 @@ class AliyunOssAdapter extends AbstractAdapter
                 printf($e->getMessage() . "\n");
                 return;
             }
-        }
 
+        }
+        
+        try {
+            $this->client->deleteObject($bucket, $path);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
+        }
+        
         return true;
     }
 
 
     /**
-     * 列举文件夹内文件列表；
+     * 列举文件夹内文件列表；可递归获取子文件夹；
      */
     public function listDirObjects($dirname = '', $recursive =  false)
     {
@@ -338,7 +348,7 @@ class AliyunOssAdapter extends AbstractAdapter
 
         if (!empty($objectList)) {
             foreach ($objectList as $objectInfo) {
-                
+
                 $object['Prefix']       = $dirname;
                 $object['Key']          = $objectInfo->getKey();
                 $object['LastModified'] = $objectInfo->getLastModified();
@@ -364,7 +374,7 @@ class AliyunOssAdapter extends AbstractAdapter
 
 
         if($recursive){
-            
+
             foreach( $dir['prefix'] as $pfix){
                 $next = [];
                 $next  =  $this->listDirObjects($pfix , $recursive);
@@ -587,7 +597,7 @@ class AliyunOssAdapter extends AbstractAdapter
             if (! $config->has($option)) {
                 continue;
             }
-            $options[$metaMap[$option]] = $config->get($option);
+            $options[static::$metaMap[$option]] = $config->get($option);
         }
 
         if ($visibility = $config->get('visibility')) {
