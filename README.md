@@ -1,6 +1,8 @@
 
 # Use AliyunOss as Laravel Storage
 
+[![Latest Stable Version](https://poser.pugx.org/aobozhang/aliyun-oss-adapter/v/stable)](https://packagist.org/packages/aobozhang/aliyun-oss-adapter) [![Total Downloads](https://poser.pugx.org/aobozhang/aliyun-oss-adapter/downloads)](https://packagist.org/packages/aobozhang/aliyun-oss-adapter) [![Latest Unstable Version](https://poser.pugx.org/aobozhang/aliyun-oss-adapter/v/unstable)](https://packagist.org/packages/aobozhang/aliyun-oss-adapter) [![License](https://poser.pugx.org/aobozhang/aliyun-oss-adapter/license)](https://packagist.org/packages/aobozhang/aliyun-oss-adapter)
+
 Aliyun oss driver for Laravel5.0+, also support flysystem adapter.
 
 ## inspire by [orzcc/aliyun-oss](https://github.com/orzcc/aliyun-oss)
@@ -17,6 +19,7 @@ use Storage;
 //...
 
 Strorage::[everything in doc]
+
 ```
 > more infomation 更多信息:
 >
