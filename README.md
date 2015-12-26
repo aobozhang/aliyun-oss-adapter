@@ -5,9 +5,7 @@
 
 Aliyun oss driver for Laravel5.0+, also support flysystem adapter.
 
-## inspire by [orzcc/aliyun-oss](https://github.com/orzcc/aliyun-oss)
-
-*IMPORTANT: aliyuncs/oss-sdk-php 2.0.1 needed， via 2.0.2 report bugs, —— Aliyun @rz*
+### inspire by [orzcc/aliyun-oss](https://github.com/orzcc/aliyun-oss)  
 
 
 ## Usage
