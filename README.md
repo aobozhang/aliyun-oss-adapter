@@ -7,8 +7,6 @@ Aliyun oss driver for Laravel5.0+, also support flysystem adapter.
 
 ## inspire by [orzcc/aliyun-oss](https://github.com/orzcc/aliyun-oss)
 
-*IMPORTANT: aliyuncs/oss-sdk-php 2.0.1 needed， via 2.0.2 report bugs, —— Aliyun @rz*
-
 
 ## Usage
 
@@ -23,9 +21,9 @@ Strorage::[everything in doc]
 ```
 > more infomation 更多信息:
 >
-> [Laravel wiki](https://laravel.com/docs/5.2/filesystem)
+> [https://laravel.com/docs/5.2/filesystem](https://laravel.com/docs/5.2/filesystem)
 >
-> [Aobo's  wiki](https://github.com/aobozhang/aliyun-oss-adapter/wiki)
+> [https://github.com/aobozhang/aliyun-oss-adapter/wiki](https://github.com/aobozhang/aliyun-oss-adapter/wiki)
 >
 
 
