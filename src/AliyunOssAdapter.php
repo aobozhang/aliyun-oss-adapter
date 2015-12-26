@@ -160,7 +160,7 @@ class AliyunOssAdapter extends AbstractAdapter
                 return;
             }
         }
-        
+
     }
 
     /**
@@ -171,7 +171,7 @@ class AliyunOssAdapter extends AbstractAdapter
         if (! $config->has('visibility') && ! $config->has('ACL')) {
             $config->set(static::$metaMap['ACL'], $this->getObjectACL($path));
         }
-        $this->delete($path);
+        // $this->delete($path);
         return $this->write($path, $contents, $config);
     }
 
@@ -183,7 +183,7 @@ class AliyunOssAdapter extends AbstractAdapter
         if (! $config->has('visibility') && ! $config->has('ACL')) {
             $config->set('ACL', $this->getObjectACL($path));
         }
-        $this->delete($path);
+        // $this->delete($path);
         return $this->writeStream($path, $resource, $config);
     }
 
@@ -249,7 +249,7 @@ class AliyunOssAdapter extends AbstractAdapter
     {
         $bucket = $this->bucket;
 
-        try{   
+        try{
             $this->client->copyObject($bucket, $path, $bucket, $newpath);
         } catch (OssException $e) {
             printf(__FUNCTION__ . ": FAILED\n");
@@ -267,7 +267,7 @@ class AliyunOssAdapter extends AbstractAdapter
     {
         $bucket = $this->bucket;
         $object = $path;
-        
+
         try{
             $this->client->deleteObject($bucket, $object);
         }catch (OssException $e) {
@@ -275,7 +275,7 @@ class AliyunOssAdapter extends AbstractAdapter
             printf($e->getMessage() . "\n");
             return;
         }
-        
+
         return ! $this->has($path);
     }
 
@@ -287,7 +287,7 @@ class AliyunOssAdapter extends AbstractAdapter
         $prefix = rtrim($this->applyPathPrefix($path), '/').'/';
         $bucket = $this->bucket;
         $dir = $this->listDirObjects($path, true);
-        
+
         if(count($dir['objects']) > 0 ){
 
             foreach($dir['objects'] as $object)
@@ -304,7 +304,7 @@ class AliyunOssAdapter extends AbstractAdapter
             }
 
         }
-        
+
         try {
             $this->client->deleteObject($bucket, $path);
         } catch (OssException $e) {
@@ -312,7 +312,7 @@ class AliyunOssAdapter extends AbstractAdapter
             printf($e->getMessage() . "\n");
             return;
         }
-        
+
         return true;
     }
 
@@ -378,7 +378,7 @@ class AliyunOssAdapter extends AbstractAdapter
             foreach( $dir['prefix'] as $pfix){
                 $next = [];
                 $next  =  $this->listDirObjects($pfix , $recursive);
-                
+
                 $dir["objects"] = array_merge($dir['objects'], $next["objects"]);
             }
 
@@ -508,7 +508,7 @@ class AliyunOssAdapter extends AbstractAdapter
         $bucket = $this->bucket;
         $dir = $this->listDirObjects($dirname, true);
         $contents = $dir["objects"];
-        
+
         $result = array_map([$this, 'normalizeResponseOri'], $contents);
         $result = array_filter($result, function ($value) {
             return $value['path'] !== false;
