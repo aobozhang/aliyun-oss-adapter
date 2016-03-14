@@ -24,6 +24,6 @@
       }
     },
     "suggest": {
-        "laravel/framework": "5.2.*"
+        "laravel/framework": "5.1.*"
     }
 }
