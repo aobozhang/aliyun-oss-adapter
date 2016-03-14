@@ -245,12 +245,12 @@ class AliyunOssAdapter extends AbstractAdapter
     /**
      * {@inheritdoc}
      */
-    public function copy($path, $newpath)
+    public function copy($path, $newpath, $options = NULL)
     {
         $bucket = $this->bucket;
 
         try{
-            $this->client->copyObject($bucket, $path, $bucket, $newpath);
+            $this->client->copyObject($bucket, $path, $bucket, $newpath, $options = NULL);
         } catch (OssException $e) {
             printf(__FUNCTION__ . ": FAILED\n");
             printf($e->getMessage() . "\n");
@@ -259,6 +259,33 @@ class AliyunOssAdapter extends AbstractAdapter
 
         return true;
     }
+
+    /**
+     * 修改Object Meta
+     * 利用copyObject接口的特性：当目的object和源object完全相同时，表示修改object的meta信息
+     *
+     * @param OssClient $ossClient OssClient实例
+     * @param string $bucket 存储空间名称
+     * @return null
+     */
+    public function modifyMetaForObject($path, $options = NULL)
+    {
+        $bucket = $this->bucket;
+        $fromBucket = $toBucket = $bucket;
+        $fromObject = $toObject = $path;
+
+        $copyOptions = $this->getOptions($options);
+        try {
+            $this->client->copyObject($fromBucket, $fromObject, $toBucket, $toObject, $copyOptions);
+        } catch (OssException $e) {
+            printf(__FUNCTION__ . ": FAILED\n");
+            printf($e->getMessage() . "\n");
+            return;
+        }
+        // print(__FUNCTION__ . ": OK" . "\n");
+        return true;
+    }
+
 
     /**
      * {@inheritdoc}
@@ -616,7 +643,6 @@ class AliyunOssAdapter extends AbstractAdapter
 
         return $options;
     }
-
 
     /**
      * Convert megabytes to bytes.
