@@ -143,7 +143,7 @@ class AliyunOssAdapter extends AbstractAdapter
         $bucket  = $this->bucket;
         $options = $this->getOptions($this->options, $config);
 
-        $multipartLimit = $this->mbToBytes($options['Multipart']);
+        $multipartLimit = $this->mbToBytes($options[OssClient::OSS_HEADERS]['Multipart']);
         $size = Util::getStreamSize($resource);
         $contents = fread($resource, $size);
 
