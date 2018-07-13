@@ -201,15 +201,22 @@ class AliyunOssAdapter extends AbstractAdapter
     /**
      * {@inheritdoc}
      */
-    public function readStream($path)
+    public function readStream($path) 
     {
         $result = $this->readObject($path);
+        // checks if string then creates resource
+        if (gettype($result['raw_contents']) === 'string') {
+            $resource = fopen('php://temp', 'r+');
+            fwrite($resource, $result['raw_contents']);
+            $result['raw_contents'] = $resource;
+        }
         $result['stream'] = $result['raw_contents'];
         rewind($result['stream']);
         // Ensure the EntityBody object destruction doesn't close the stream
-        $result['raw_contents']->detachStream();
+        // can't call `->detachStream()` on resource object
+        if (gettype($result['raw_contents']) !== 'resource')
+            $result['raw_contents']->detachStream();
         unset($result['raw_contents']);
-
         return $result;
     }
 
